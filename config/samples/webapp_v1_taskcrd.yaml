@@ -1,0 +1,10 @@
+apiVersion: webapp.xiaoyeshiyu.domain/v1
+kind: TaskCrd
+metadata:
+  labels:
+    app.kubernetes.io/name: task-crd
+    app.kubernetes.io/managed-by: kustomize
+  name: taskcrd-sample
+spec:
+  deploy: nginx
+  replicas: 2
