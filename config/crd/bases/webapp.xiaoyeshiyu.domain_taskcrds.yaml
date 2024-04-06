@@ -41,7 +41,14 @@ spec:
             properties:
               deploy:
                 type: string
-              replicas:
+              end:
+                type: string
+              end_replicas:
+                format: int32
+                type: integer
+              start:
+                type: string
+              start_replicas:
                 format: int32
                 type: integer
             type: object

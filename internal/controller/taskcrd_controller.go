@@ -19,12 +19,12 @@ package controller
 import (
 	"context"
 
+	"github.com/robfig/cron/v3"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
 	webappv1 "xiaoyeshiyu.domain/taskcrd/api/v1"
 )
 
@@ -51,7 +51,6 @@ func (r *TaskCrdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	_ = log.FromContext(ctx)
 
 	var taskCrd webappv1.TaskCrd
-	// 获取 guestbook 对象
 	err := r.Client.Get(ctx, req.NamespacedName, &taskCrd)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -64,13 +63,26 @@ func (r *TaskCrdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 
+		c := cron.New()
+
 		for _, deploy := range deploys.Items {
 			if deploy.ObjectMeta.Name == taskCrd.Spec.Deploy {
-				deploy.Spec.Replicas = &taskCrd.Spec.Replicas
-				err = r.Client.Update(ctx, &deploy)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
+
+				c.AddFunc(taskCrd.Spec.Start, func() {
+					deploy.Spec.Replicas = &taskCrd.Spec.StartReplicas
+					err = r.Client.Update(ctx, &deploy)
+					if err != nil {
+						return
+					}
+				})
+
+				c.AddFunc(taskCrd.Spec.End, func() {
+					deploy.Spec.Replicas = &taskCrd.Spec.EndReplicas
+					err = r.Client.Update(ctx, &deploy)
+					if err != nil {
+						return
+					}
+				})
 			}
 		}
 

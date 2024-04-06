@@ -28,8 +28,11 @@ type TaskCrdSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Deploy   string `json:"deploy,omitempty"`
-	Replicas int32  `json:"replicas,omitempty"`
+	Deploy        string `json:"deploy,omitempty"`
+	Start         string `json:"start,omitempty"`
+	StartReplicas int32  `json:"start_replicas,omitempty"`
+	End           string `json:"end,omitempty"`
+	EndReplicas   int32  `json:"end_replicas,omitempty"`
 }
 
 // TaskCrdStatus defines the observed state of TaskCrd
