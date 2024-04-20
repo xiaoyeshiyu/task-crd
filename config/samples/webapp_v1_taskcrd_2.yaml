@@ -4,13 +4,13 @@ metadata:
   labels:
     app.kubernetes.io/name: task-crd
     app.kubernetes.io/managed-by: kustomize
-  name: taskcrd-sample
+  name: taskcrd-sample-2
   namespace: m1
 spec:
   deployment: nginx
   hpa: php-apache
   average_utilization: 10
-  start: "34 22 * * *"
+  start: "37 22 * * *"
   max_replicas: 10
-  end: "40 22 * * *"
+  end: "45 22 * * *"
   end_replicas: 1

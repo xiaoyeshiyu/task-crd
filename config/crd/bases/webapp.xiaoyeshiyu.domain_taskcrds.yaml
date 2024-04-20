@@ -39,18 +39,23 @@ spec:
           spec:
             description: TaskCrdSpec defines the desired state of TaskCrd
             properties:
-              deploy:
+              average_utilization:
+                format: int32
+                type: integer
+              deployment:
                 type: string
               end:
                 type: string
               end_replicas:
                 format: int32
                 type: integer
-              start:
+              hpa:
                 type: string
-              start_replicas:
+              max_replicas:
                 format: int32
                 type: integer
+              start:
+                type: string
             type: object
           status:
             description: TaskCrdStatus defines the observed state of TaskCrd

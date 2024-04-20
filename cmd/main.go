@@ -125,6 +125,7 @@ func main() {
 	if err = (&controller.TaskCrdReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Tasks:  make(map[string]controller.Task),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TaskCrd")
 		os.Exit(1)
