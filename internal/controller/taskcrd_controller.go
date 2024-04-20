@@ -18,9 +18,13 @@ package controller
 
 import (
 	"context"
+	"sync/atomic"
+	"time"
 
 	"github.com/robfig/cron/v3"
 	v1 "k8s.io/api/apps/v1"
+	v2 "k8s.io/api/autoscaling/v2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,43 +54,100 @@ type TaskCrdReconciler struct {
 func (r *TaskCrdReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
+	// 获取 CRD
 	var taskCrd webappv1.TaskCrd
 	err := r.Client.Get(ctx, req.NamespacedName, &taskCrd)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if taskCrd.Spec.Deploy != "" {
-		var deploys v1.DeploymentList
-		err = r.Client.List(ctx, &deploys)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
+	// 获取 deployment
+	if taskCrd.Spec.Deployment == "" {
+		return ctrl.Result{}, nil
+	}
 
-		c := cron.New()
+	var deploy v1.Deployment
+	err = r.Client.Get(ctx, client.ObjectKey{Namespace: taskCrd.Namespace, Name: taskCrd.Spec.Deployment}, &deploy)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
-		for _, deploy := range deploys.Items {
-			if deploy.ObjectMeta.Name == taskCrd.Spec.Deploy {
+	// 获取 hpa
+	if taskCrd.Spec.HPA == "" {
+		return ctrl.Result{}, nil
+	}
 
-				c.AddFunc(taskCrd.Spec.Start, func() {
-					deploy.Spec.Replicas = &taskCrd.Spec.StartReplicas
+	hpa := v2.HorizontalPodAutoscaler{}
+	err = r.Client.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: taskCrd.Spec.HPA}, &hpa)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	var (
+		start = make(chan struct{})
+		end   = make(chan struct{})
+	)
+	// 都存在，则开始执行
+	c := cron.New()
+	c.AddFunc(taskCrd.Spec.Start, func() {
+		start <- struct{}{}
+	})
+
+	c.AddFunc(taskCrd.Spec.End, func() {
+		end <- struct{}{}
+	})
+
+	for {
+	OUT:
+		select {
+		case <-ctx.Done():
+			return ctrl.Result{}, ctx.Err()
+		case <-start:
+			log.Log.Info("task start: ", time.Now())
+			tick := time.NewTicker(10 * time.Second)
+			for {
+				select {
+				case <-ctx.Done():
+					return ctrl.Result{}, ctx.Err()
+				case <-end:
+					log.Log.Info("task end: ", time.Now())
+					atomic.StoreInt32(deploy.Spec.Replicas, taskCrd.Spec.EndReplicas)
 					err = r.Client.Update(ctx, &deploy)
 					if err != nil {
-						return
+						return ctrl.Result{}, err
 					}
-				})
-
-				c.AddFunc(taskCrd.Spec.End, func() {
-					deploy.Spec.Replicas = &taskCrd.Spec.EndReplicas
-					err = r.Client.Update(ctx, &deploy)
+					break OUT
+				case <-tick.C:
+					err = r.Client.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: taskCrd.Spec.HPA}, &hpa)
 					if err != nil {
-						return
+						return ctrl.Result{}, err
 					}
-				})
+					for _, metrics := range hpa.Status.CurrentMetrics {
+						// CPU 的平均使用率小于设定值，则修改对应 deployment 副本数目
+						if metrics.Resource.Name == corev1.ResourceCPU && *metrics.Resource.Current.AverageUtilization < taskCrd.Spec.AverageUtilization {
+							err = r.Client.Get(ctx, client.ObjectKey{Namespace: taskCrd.Namespace, Name: taskCrd.Spec.Deployment}, &deploy)
+							if err != nil {
+								return ctrl.Result{}, err
+							}
+							log.Log.Info("get deploy", deploy.Name, "replicas", deploy.Status.Replicas)
+							if deploy.Status.Replicas < taskCrd.Spec.MaxReplicas {
+								atomic.AddInt32(deploy.Spec.Replicas, 1)
+								err = r.Client.Update(ctx, &deploy)
+								if err != nil {
+									return ctrl.Result{}, err
+								}
+							} else {
+								// 不小于，则结束
+								tick.Stop()
+							}
+						}
+					}
+				}
 			}
 		}
-
 	}
+
+	c.Stop()
 
 	return ctrl.Result{}, nil
 }
