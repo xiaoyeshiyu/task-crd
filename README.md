@@ -1,8 +1,9 @@
 # task-crd
-// TODO(user): Add simple overview of use/purpose
+在定时的时间段中，依赖某个主要服务的 CPU 利用率，调整另外一个服务的副本。
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+用于异步任务处理时，加速任务处理速度。
+在时间段内（例如访问量少，凌晨），判断主要服务 metrics 较低，确保访问量低， 开始增加异步处理的 worker 个数，加快异步任务处理速度。
 
 ## Getting Started
 
@@ -90,7 +91,7 @@ kubectl apply -f https://raw.githubusercontent.com/<org>/task-crd/<tag or branch
 ```
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
+1. 优化算法，在时间段内，访问量突增，需要将 worker 个数降下来，避免影响主要服务
 
 **NOTE:** Run `make help` for more information on all potential `make` targets
 
